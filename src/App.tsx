@@ -14,7 +14,7 @@ function App() {
   const [priceMax, setPriceMax] = useState<string>("");
   const [inStockOnly, setInStockOnly] = useState<boolean>(false);
   const [sortKey, setSortKey] = useState<string>("name-asc");
-  const [sourceLabel, setSourceLabel] = useState<string>("public/son.xml");
+  const [sourceLabel, setSourceLabel] = useState<string>("public/son_updated.xml");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set()
   );

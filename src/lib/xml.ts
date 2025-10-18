@@ -1,6 +1,6 @@
 import type { Catalog, Product, Category } from "../types";
 
-const LOCAL_XML_PATH = "/son.xml"; // place son.xml in the project's public/ folder
+const LOCAL_XML_PATH = "/son_updated.xml"; // place son_updated.xml in the project's public/ folder
 
 export async function fetchCatalog(): Promise<Catalog> {
   const bust = `${LOCAL_XML_PATH}`; // avoid 304 by cache-busting
@@ -53,15 +53,52 @@ export function parseTicimaxXml(xmlText: string): Catalog {
     throw new Error("Invalid XML received from Ticimax");
   }
 
-  const productNodes = Array.from(doc.querySelectorAll("Urun"));
+  // Helper function to safely query selectors
+  const safeQuerySelector = (element: Element, selector: string): Element | null => {
+    try {
+      return element.querySelector(selector);
+    } catch (e) {
+      console.warn(`Invalid selector '${selector}':`, e);
+      return null;
+    }
+  };
+
+  const safeQuerySelectorAll = (element: Element, selector: string): Element[] => {
+    try {
+      return Array.from(element.querySelectorAll(selector));
+    } catch (e) {
+      console.warn(`Invalid selector '${selector}':`, e);
+      return [];
+    }
+  };
+
+  const productNodes = safeQuerySelectorAll(doc.documentElement, "Urun");
+  if (productNodes.length === 0) {
+    // Try alternative selectors if no products found
+    productNodes.push(...safeQuerySelectorAll(doc.documentElement, "* > Urun"));
+    productNodes.push(...safeQuerySelectorAll(doc.documentElement, "* > * > Urun"));
+  }
 
   const products: Product[] = productNodes.map((node) => {
-    const text = (sel: string) =>
-      node.querySelector(sel)?.textContent?.trim() || "";
+    const text = (sel: string) => {
+      try {
+        const element = safeQuerySelector(node, sel);
+        return element?.textContent?.trim() || "";
+      } catch (e) {
+        console.warn(`Error getting text for selector '${sel}':`, e);
+        return "";
+      }
+    };
+    
     const number = (sel: string) => {
-      const value = text(sel).replace(",", ".");
-      const num = Number(value);
-      return Number.isFinite(num) ? num : undefined;
+      try {
+        const value = text(sel).replace(",", ".");
+        const num = Number(value);
+        return Number.isFinite(num) ? num : undefined;
+      } catch (e) {
+        console.warn(`Error converting to number for selector '${sel}':`, e);
+        return undefined;
+      }
     };
 
     // Get category info from KategoriTree
@@ -80,7 +117,8 @@ export function parseTicimaxXml(xmlText: string): Catalog {
     const brand = text("Marka") || undefined;
 
     // Get price from first option (Secenek)
-    const firstOption = node.querySelector("UrunSecenek > Secenek");
+    const firstOption = safeQuerySelector(node, "UrunSecenek > Secenek") || 
+                       safeQuerySelector(node, "Secenek");
     const price = firstOption
       ? number(firstOption.querySelector("SatisFiyati")?.textContent || "")
       : undefined;
@@ -96,7 +134,7 @@ export function parseTicimaxXml(xmlText: string): Catalog {
 
     const imageUrls: string[] = [];
     // Look for images in various possible locations
-    const resimNodes = node.querySelectorAll("Resim");
+    const resimNodes = safeQuerySelectorAll(node, "Resim");
     resimNodes.forEach((resimNode) => {
       const imgUrl = resimNode.textContent?.trim();
       if (imgUrl) imageUrls.push(imgUrl);
